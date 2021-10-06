@@ -427,9 +427,18 @@ public class LicenseController extends CoTopComponent{
 			LicenseMaster licenseMaster
 			, HttpServletRequest req
 			, HttpServletResponse res
-			, Model model){
-		
+			, Model model) {
+
 		List<LicenseMaster> list = licenseService.getLicenseNameList();
 		return makeJsonResponseHeader(list);
-	}	
+	}
+
+	@GetMapping(value = LICENSE.LICENSE_BULK_REG, produces = "text/html; charset=utf-8")
+	public String LicenseBulkRegPage(HttpServletRequest req, HttpServletResponse res, Model model) {
+		// oss list (oss name으로만)
+		System.out.println("LICENSE_BULK_REG");
+		model.addAttribute("message", "hello");
+
+		return LICENSE.LICENSE_BULK_REG_JSP;
+	}
 }
