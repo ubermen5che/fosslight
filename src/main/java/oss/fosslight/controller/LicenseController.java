@@ -24,10 +24,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 import oss.fosslight.CoTopComponent;
 import oss.fosslight.common.CoCodeManager;
 import oss.fosslight.common.CoConstDef;
 import oss.fosslight.common.CommonFunction;
+import oss.fosslight.common.Url;
 import oss.fosslight.common.Url.LICENSE;
 import oss.fosslight.common.CustomXssFilter;
 import oss.fosslight.domain.CoMail;
@@ -37,9 +40,13 @@ import oss.fosslight.domain.History;
 import oss.fosslight.domain.LicenseMaster;
 import oss.fosslight.domain.OssMaster;
 import oss.fosslight.service.CommentService;
+import oss.fosslight.service.FileService;
 import oss.fosslight.service.HistoryService;
 import oss.fosslight.service.LicenseService;
 import oss.fosslight.util.DateUtil;
+import oss.fosslight.util.ExcelUtil;
+import oss.fosslight.util.FileUtil;
+import oss.fosslight.util.StringUtil;
 import oss.fosslight.validation.T2CoValidationResult;
 import oss.fosslight.validation.custom.T2CoLicenseValidator;
 
@@ -49,7 +56,8 @@ public class LicenseController extends CoTopComponent{
 	@Autowired LicenseService licenseService;
 	@Autowired HistoryService historyService;
 	@Autowired CommentService commentService;
-	
+	@Autowired FileService fileService;
+
 	private final String SESSION_KEY_SEARCH = "SESSION_KEY_LICENSE_LIST";
 	
 	@GetMapping(value=LICENSE.LIST)
@@ -210,7 +218,159 @@ public class LicenseController extends CoTopComponent{
 		
 		return makeJsonResponseHeader();
 	}
-	
+
+	@PostMapping(value= LICENSE.BULK_REG_AJAX)
+	public @ResponseBody ResponseEntity<Object> saveAjaxJson(
+			@RequestBody List<LicenseMaster> licenseMasters
+			, HttpServletRequest req
+			, HttpServletResponse res
+			, Model model) {
+		//응답 형식 : List<Map<String, String>>
+		List<Map<String, String>> licenseNameMapList = new ArrayList<>();
+		System.out.println("saveAjax/json -> licenseMaster = " + licenseMasters);
+		Map<String, Object> resMap = new HashMap<>();
+
+		if (licenseMasters.isEmpty()){
+			resMap.put("res", "false");
+			return makeJsonResponseHeader(resMap);
+		}
+
+		//LicenseType, Obligation, Restriction에 대한 처리 로직
+		//License Type 변환 및 Restriction 변환
+
+		for (LicenseMaster licenseMaster : licenseMasters) {
+			String licenseType = licenseMaster.getLicenseType();
+			licenseType = StringUtil.removeWhitespace(licenseType);
+			if (StringUtil.equalsIgnoreCase(licenseType, "permissive")) {
+				licenseMaster.setLicenseType(CoConstDef.CD_LICENSE_TYPE_PMS);
+			} else if (StringUtil.equalsIgnoreCase(licenseType, "weakcopyleft")) {
+				licenseMaster.setLicenseType(CoConstDef.CD_LICENSE_TYPE_WCP);
+			} else if (StringUtil.equalsIgnoreCase(licenseType, "copyleft")) {
+				licenseMaster.setLicenseType(CoConstDef.CD_LICENSE_TYPE_CP);
+			} else if (StringUtil.equalsIgnoreCase(licenseType, "proprietary")) {
+				licenseMaster.setLicenseType(CoConstDef.CD_LICENSE_TYPE_NA);
+			} else if (StringUtil.equalsIgnoreCase(licenseType, "proprietaryfree")) {
+				licenseMaster.setLicenseType(CoConstDef.CD_LICENSE_TYPE_PF);
+			} else {
+				resMap.put("res", "false");
+				return makeJsonResponseHeader(resMap);
+			}
+			System.out.println("licenseMaster.getLicenseType() = " + licenseMaster.getLicenseType());
+			String[] restrictions = StringUtil.delimitedStringToStringArray(licenseMaster.getRestriction(), ",");
+			List<String> restrictionList = new ArrayList<>();
+			String restrictionCodes = "";
+
+			for (String restriction : restrictions) {
+				restriction = StringUtil.removeWhitespace(restriction);
+				if (StringUtil.equalsIgnoreCase(restriction, "Non-CommercialUseOnly")) {
+					restrictionList.add("1");
+				} else if (StringUtil.equalsIgnoreCase(restriction, "NetworkRedistribution")) {
+					restrictionList.add("2");
+				} else if (StringUtil.equalsIgnoreCase(restriction, "RestrictedModifications")) {
+					restrictionList.add("3");
+				} else if (StringUtil.equalsIgnoreCase(restriction, "PlatformDeploymentRestriction")) {
+					restrictionList.add("4");
+				} else if (StringUtil.equalsIgnoreCase(restriction, "ProhibitedPurpose")) {
+					restrictionList.add("5");
+				} else if (StringUtil.equalsIgnoreCase(restriction, "SpecificationConstraints")) {
+					restrictionList.add("6");
+				} else if (StringUtil.equalsIgnoreCase(restriction, "RestrictedRedistribution")) {
+					restrictionList.add("7");
+				} else if (StringUtil.equalsIgnoreCase(restriction, "CommonsClauseRestriction")) {
+					restrictionList.add("8");
+				} else {
+					resMap.put("res", "false");
+					resMap.put("msg", "invalid restriction");
+					return makeJsonResponseHeader(resMap);
+				}
+
+				Collections.sort(restrictionList);
+				for (String s : restrictionList)
+					restrictionCodes += s + ",";
+
+				StringUtil.removeEnd(restrictionCodes, ",");
+				licenseMaster.setRestrictions(restrictionCodes);
+				System.out.println("licenseMaster.getRestrictions() = " + licenseMaster.getRestrictions());
+			}
+
+			String[] obligations = StringUtil.delimitedStringToStringArray(licenseMaster.getObligation(), ",");
+			for (String obligation : obligations) {
+				obligation = StringUtil.removeWhitespace(obligation);
+				System.out.println("obligation rm whiteSpace = " + obligation);
+				if (StringUtil.equalsIgnoreCase(obligation, "notice")) {
+					licenseMaster.setObligationNotificationYn("Y");
+				} else if (StringUtil.equalsIgnoreCase(obligation, "sourcecode")) {
+					licenseMaster.setObligationDisclosingSrcYn("Y");
+				} else {
+					resMap.put("res", "false");
+					resMap.put("msg", "invalid obligation");
+					return makeJsonResponseHeader(resMap);
+				}
+			}
+			System.out.println("licenseMaster.getObligation() = " + licenseMaster.getObligation());
+		}
+
+		List<LicenseMaster> notSavedLicenses = new ArrayList<>();
+
+		//checkExitsLicense할 때 파라미터로 넘길 때 licenseMaster.setLicenseName으로 name 체크, nickname체크, shortIdentifier 체크 해주어야함.
+		Boolean isDup;
+
+		for (LicenseMaster l : licenseMasters) {
+			System.out.println("l = " + l);
+			//name 검사
+			isDup = false;
+			LicenseMaster tmp = licenseService.checkExistsLicense(l);
+			if (!isNullObject(tmp)) { //null이 아닐때 해당 name을 가진 License가 존재한다는것.
+				continue;
+			}
+			System.out.println("tmp = " + tmp);
+			//nickname검사 nickname은 여러개일 수 있음. 입력 form()
+			String[] tmpNicknames = l.getLicenseNicknames();
+			if (!isNullObject(tmpNicknames)) {
+				System.out.println("tmpNicknames = " + tmpNicknames);
+				for (String s : tmpNicknames) {
+					LicenseMaster nickname = new LicenseMaster();
+					nickname.setLicenseName(s);
+					System.out.println("nickname = " + nickname);
+					nickname = licenseService.checkExistsLicense(nickname);
+					System.out.println("after check nickname = " + nickname);
+					if (!isNullObject(nickname)) {
+						isDup = true;
+						continue;
+					}
+				}
+			}
+			String identifier = l.getShortIdentifier();
+			LicenseMaster licenseNameForIdentifier = new LicenseMaster();
+			licenseNameForIdentifier.setLicenseName(identifier);
+			licenseNameForIdentifier = licenseService.checkExistsLicense(licenseNameForIdentifier);
+			System.out.println("after check licenseNameForIdentifier = " + licenseNameForIdentifier);
+			if (!isNullObject(licenseNameForIdentifier)) {
+				isDup = true;
+				continue;
+			}
+
+			if (!isDup) {
+				notSavedLicenses.add(l);
+			}
+		}
+
+		for (LicenseMaster l : notSavedLicenses){
+			licenseService.registLicenseMaster(l);
+		}
+
+		for (LicenseMaster l : notSavedLicenses){
+			Map<String, String> licenseNameMap = new HashMap<>();
+			licenseNameMap.put("licenseName", l.getLicenseName());
+			licenseNameMapList.add(licenseNameMap);
+		}
+
+
+		resMap.put("res", "true");
+		resMap.put("value", licenseNameMapList);
+		return makeJsonResponseHeader(resMap);
+	}
+
 	@PostMapping(value=LICENSE.SAVE_AJAX)
 	public @ResponseBody ResponseEntity<Object> saveAjax(
 			@ModelAttribute LicenseMaster licenseMaster
@@ -247,7 +407,7 @@ public class LicenseController extends CoTopComponent{
 		} else if(webpages == null){
 			licenseMaster.setWebpage("");
 		}
-		
+
 		result = licenseService.registLicenseMaster(licenseMaster);
 		
 		if(!isNew) {
@@ -475,5 +635,56 @@ public class LicenseController extends CoTopComponent{
 		map.put("licenseId", lm.getLicenseId());
 
 		return makeJsonResponseHeader(map);
+	}
+
+	@ResponseBody
+	@PostMapping(value = Url.LICENSE.CSV_FILE)
+	public ResponseEntity<Object> csvFile(T2File file, MultipartHttpServletRequest req, HttpServletRequest request,
+						  HttpServletResponse res, Model model) throws Exception {
+		// oss list (oss name으로만)
+		List<Object> resultList = new ArrayList<>();
+		List<Object> limitCheckFiles = new ArrayList<>();
+		List<UploadFile> list = new ArrayList<UploadFile>();
+		List<LicenseMaster> licenseList = new ArrayList<>();
+		Iterator<String> fileNames = req.getFileNames();
+		List<Map<String, Object>> licenseWithStatusList = new ArrayList<>();
+		Map<String, Object> resMap = new HashMap<>();
+
+		while (fileNames.hasNext()) {
+			UploadFile uploadFile = new UploadFile();
+			MultipartFile multipart = req.getFile(fileNames.next());
+			uploadFile.setSize(multipart.getSize());
+			list.add(uploadFile);
+		}
+
+		limitCheckFiles = CommonFunction.checkXlsxFileLimit(list);
+		resMap.put("limitCheck", limitCheckFiles);
+		//licenseMapper -> checkExistsLicense로 중복체크(param : LicenseMaster)
+		//readLicenseList에서 LicenseMaster로 만들어서 return 해준후
+		//checkExistsLicense의 param으로 각 element넘겨줌
+		//license가 존재한다면 LicenseMaster객체 리턴 -> 존재한다면 등록 x (이미등록된 상태로 표기)
+		//존재하지않으면 Null 리턴. -> null일 경우는 등록을 해야한다.
+		licenseList = ExcelUtil.readLicenseList(req, CommonFunction.emptyCheckProperty("upload.path", "/upload"));
+
+		System.out.println("readLicenseList -> licenseList = " + licenseList);
+
+		if (licenseList != null) {
+			Map<String, Object> licenseWithStatus;
+			for (int i = 0; i < licenseList.size(); i++) {
+				licenseWithStatus = new HashMap<>();
+				licenseWithStatus.put("license", licenseList.get(i));
+				licenseWithStatus.put("status", "Not loaded");
+				licenseWithStatusList.add(licenseWithStatus);
+			}
+		} else {
+			resMap.put("res", "false");
+			return makeJsonResponseHeader(resMap);
+		}
+
+		System.out.println("licenseWithStatusList = " + licenseWithStatusList);
+		resMap.put("res", "true");
+		resMap.put("value", licenseWithStatusList);
+
+		return makeJsonResponseHeader(resMap);
 	}
 }

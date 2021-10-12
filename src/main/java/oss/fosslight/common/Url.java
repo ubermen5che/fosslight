@@ -70,9 +70,11 @@ public final class Url {
 		public static final String VALIDATION = PATH + "/validation";
 		public static final String SAVE_AJAX = PATH + "/saveAjax";
 		public static final String DEL_AJAX = PATH + "/delAjax";
+
 		public static final String LICENSE_BULK_REG = PATH + "/licenseBulkReg";
 		public static final String LICENSE_BULK_REG_JSP = TILES_ROOT + PATH + "/licenseBulkReg";
-
+		public static final String CSV_FILE = PATH + "/csvFile";
+		public static final String BULK_REG_AJAX = PATH + "/bulkRegAjax";
 		public static final String SAVE_COMMENT = PATH + "/saveComment";
 		public static final String DELETE_COMMENT = PATH + "/deleteComment";
 		
