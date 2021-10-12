@@ -10,6 +10,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -91,6 +92,269 @@ public class ExcelUtil extends CoTopComponent {
 		return sheetNoList;
 	}
 
+	public static List<LicenseMaster> readLicenseList(MultipartHttpServletRequest req, String excelLocalPath) throws InvalidFormatException, IOException {
+		Iterator<String> fileNames = req.getFileNames();
+		List<LicenseMaster> licenseMasterList = new ArrayList<>();
+
+		int id = 1;
+
+		while (fileNames.hasNext()) {
+			//파일 만들기
+			MultipartFile multipart = req.getFile(fileNames.next());
+			String fileName = multipart.getOriginalFilename();
+			String[] fileNameArray = StringUtil.split(fileName, File.separator);
+			fileName = fileNameArray[fileNameArray.length - 1];
+
+			System.out.println("fileName = " + fileName);
+			File file = new File(excelLocalPath + "/" + fileName);
+			FileUtil.transferTo(multipart, file);
+			//엑셀 컬럼 읽기
+			HSSFWorkbook wbHSSF = null;
+			XSSFWorkbook wbXSSF = null;
+			String[] ext = StringUtil.split(fileName, ".");
+			String extType = ext[ext.length - 1];
+			String codeExt[] = StringUtil.split(codeMapper.selectExtType("12"), ",");
+			int count = 0;
+
+			for (int i = 0; i < codeExt.length; i++) {
+				if (codeExt[i].equalsIgnoreCase(extType)) {
+					count++;
+				}
+				;
+			}
+			int rowindex = 0;
+			int colindex = 0;
+
+			System.out.println("extType = " + extType);
+
+			if (count != 1) {
+				return null;
+			} else if ("xls".equals(extType) || "XLS".equals(extType)) {
+				try {
+					wbHSSF = new HSSFWorkbook(new FileInputStream(file));
+
+					HSSFSheet sheet = wbHSSF.getSheetAt(0);
+					System.out.println("sheet HSSFSheet= " + sheet);
+					int rowSize = sheet.getPhysicalNumberOfRows();
+					System.out.println("rowSize = " + rowSize);
+					for (rowindex = 0; rowindex < rowSize; rowindex++) {
+						LicenseMaster licenseMaster = new LicenseMaster();
+						if (rowindex == 0)
+							continue;
+						else {
+							HSSFRow row = sheet.getRow(rowindex);
+							int maxcols = row.getLastCellNum();
+
+							for (colindex = 0; colindex < maxcols; colindex++) {
+								HSSFCell cell = row.getCell(colindex);
+								String value = getCellData(cell);
+								System.out.println("value = " + value + ", " + "rowindex : " + rowindex + ", " + "colindex : " + colindex);
+								if (colindex == 0) { //License Name
+									if (value == null) {
+										log.debug("license Name must not be null.");
+										if (licenseMasterList.isEmpty()){
+											return null;
+										} else {
+											return licenseMasterList;
+										}
+									} else {
+										licenseMaster.setLicenseName(value);
+									}
+								} else if (colindex == 1) { //License Type
+									if (value == null) {
+										log.error("license Type must not be null.");
+										if (licenseMasterList.isEmpty()){
+											return null;
+										} else {
+											return licenseMasterList;
+										}
+									} else { //possible value : Permissive, permissive => Permissive
+										licenseMaster.setLicenseType(value);
+									}
+								} else if (colindex == 2) { // Restriction (Format : '1,2,3')
+									if (value == null) {
+									} else {
+										licenseMaster.setRestriction(value);
+									}
+								} else if (colindex == 3) { // Obligation (value : Notice, Source Code)
+									if (value == null) {
+									} else {
+										licenseMaster.setObligation(value);
+									}
+								} else if (colindex == 4) { // SPDX Short Identifier
+									if (value == null) {
+									} else {
+										licenseMaster.setShortIdentifier(value);
+									}
+								} else if (colindex == 5) { // Nickname (licenseNicknames : list형태 ,로 구분)
+									if (value == null) {
+									} else {
+										String[] nicknames = StringUtil.delimitedStringToStringArray(value, ",");
+										for (String s : nicknames)
+											s = StringUtil.removeWhitespace(s);
+
+										licenseMaster.setLicenseNicknames(nicknames);
+									}
+								} else if (colindex == 6) { // Web site for the license
+									if (value == null) {
+									} else {
+										licenseMaster.setWebpage(value);
+									}
+								} else if (colindex == 7) { // License Text
+									if (value == null) {
+										log.error("License Text must not be empty.");
+										if (licenseMasterList.isEmpty())
+											return null;
+										else
+											return licenseMasterList;
+									} else {
+										licenseMaster.setLicenseText(value);
+									}
+								} else if (colindex == 8) { //User Guide
+									if (value == null) {
+									} else {
+										System.out.println("User Guide = " + value);
+									}
+								} else if (colindex == 9) { //attribution
+									if (value == null) {
+									} else {
+										licenseMaster.setAttribution(value);
+									}
+								} else if (colindex == 10) { //Comment (<p> context </p>)
+									if (value == null) {
+									} else {
+										licenseMaster.setComment(value);
+									}
+								}
+							}
+						}
+						System.out.println("Excel Util licenseMaster = " + licenseMaster);
+						licenseMasterList.add(licenseMaster);
+					}
+				} catch (IOException e) {
+					log.error(e.getMessage(), e);
+				} finally {
+					try {
+						wbHSSF.close();
+					} catch (Exception e) {
+					}
+				}
+				return licenseMasterList;
+			} else if ("xlsx".equals(extType) || "XLSX".equals(extType)) {
+				try {
+					wbXSSF = new XSSFWorkbook(new FileInputStream(file));
+
+					XSSFSheet sheet = wbXSSF.getSheetAt(0);
+					System.out.println("XSSFSheet sheet = " + sheet);
+					int rowSize = sheet.getPhysicalNumberOfRows();
+					System.out.println("rowSize = " + rowSize);
+					for (rowindex = 0; rowindex < rowSize; rowindex++) {
+						LicenseMaster licenseMaster = new LicenseMaster();
+						if (rowindex == 0)
+							continue;
+						else {
+							XSSFRow row = sheet.getRow(rowindex);
+							int maxcols = row.getLastCellNum();
+
+							for (colindex = 0; colindex < maxcols; colindex++) {
+								XSSFCell cell = row.getCell(colindex);
+								String value = getCellData(cell);
+								System.out.println("value = " + value + ", " + "rowindex : " + rowindex + ", " + "colindex : " + colindex);
+								if (colindex == 0) { //License Name
+									if (value == null) {
+										log.debug("license Name must not be null.");
+										if (licenseMasterList.isEmpty()){
+											return null;
+										} else {
+											return licenseMasterList;
+										}
+									} else {
+										licenseMaster.setLicenseName(value);
+									}
+								} else if (colindex == 1) { //License Type
+									if (value == null) {
+										log.error("license Type must not be null.");
+										if (licenseMasterList.isEmpty()){
+											return null;
+										} else {
+											return licenseMasterList;
+										}
+									} else { //possible value : Permissive, permissive => Permissive
+										licenseMaster.setLicenseType(value);
+									}
+								} else if (colindex == 2) { // Restriction (Format : '1,2,3')
+									if (value == null) {
+									} else {
+										licenseMaster.setRestriction(value);
+									}
+								} else if (colindex == 3) { // Obligation (value : Notice, Source Code)
+									if (value == null) {
+									} else {
+										licenseMaster.setObligation(value);
+									}
+								} else if (colindex == 4) { // SPDX Short Identifier
+									if (value == null) {
+									} else {
+										licenseMaster.setShortIdentifier(value);
+									}
+								} else if (colindex == 5) { // Nickname (licenseNicknames : list형태 ,로 구분)
+									if (value == null) {
+									} else {
+										String[] nicknames = StringUtil.delimitedStringToStringArray(value, ",");
+										for (String s : nicknames)
+											s = StringUtil.removeWhitespace(s);
+
+										licenseMaster.setLicenseNicknames(nicknames);
+									}
+								} else if (colindex == 6) { // Web site for the license
+									if (value == null) {
+									} else {
+										licenseMaster.setWebpage(value);
+									}
+								} else if (colindex == 7) { // License Text
+									if (value == null) {
+										log.error("License Text must not be empty.");
+										if (licenseMasterList.isEmpty())
+											return null;
+										else
+											return licenseMasterList;
+									} else {
+										licenseMaster.setLicenseText(value);
+									}
+								} else if (colindex == 8) { //User Guide
+									if (value == null) {
+									} else {
+										System.out.println("User Guide = " + value);
+									}
+								} else if (colindex == 9) { //attribution
+									if (value == null) {
+									} else {
+										licenseMaster.setAttribution(value);
+									}
+								} else if (colindex == 10) { //Comment (<p> context </p>)
+									if (value == null) {
+									} else {
+										licenseMaster.setComment(value);
+									}
+								}
+							}
+						}
+						System.out.println("Excel Util licenseMaster = " + licenseMaster);
+						licenseMasterList.add(licenseMaster);
+					}
+				} catch (IOException e) {
+					log.error(e.getMessage(), e);
+				} finally {
+					try {
+						wbXSSF.close();
+					} catch (Exception e2) {
+					}
+				}
+				return licenseMasterList;
+			}
+		}
+		return null;
+	}
 	public static List<Object> getSheetNames(List<UploadFile> list, String excelLocalPath) throws InvalidFormatException, FileNotFoundException, IOException {
 		List<Object> sheetNameList = new ArrayList<Object>();
 		//파일 만들기
@@ -99,7 +363,7 @@ public class ExcelUtil extends CoTopComponent {
 		String extType = ext[ext.length-1];
 		String codeExt[] = StringUtil.split(codeMapper.selectExtType("12"),",");
 		int count = 0;
-		
+
 		for(int i = 0; i < codeExt.length; i++){
 			if(codeExt[i].equalsIgnoreCase(extType)){
 				count++;
@@ -142,7 +406,8 @@ public class ExcelUtil extends CoTopComponent {
 		
 		return sheetNameList;
 	}
-	
+
+
 	public static List<OssComponents> getOssList(MultipartHttpServletRequest req, String excelLocalPath) {
 		Iterator<String> fileNames = req.getFileNames();
 		List<OssComponents> ossList = new ArrayList<OssComponents>();
