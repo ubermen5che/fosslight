@@ -7,10 +7,118 @@
 --%>
 <%@ page contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
 <%@ include file="/WEB-INF/constants.jsp"%>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
-<script>
+<jsp:include page="../common/gridCommonFn.jsp" flush="false" />
+<script type="text/javascript">
+    var jsonData;
+    var withStatus;
+    var loadedInfo;
+    var licenseData = [];
+    var isClicked = false;
+
+    function refreshGrid($grid, results) {
+        $grid.jqGrid('clearGridData')
+            .jqGrid('setGridParam', { data: results })
+            .trigger('reloadGrid', [{ page: 1}]);
+    }
+
+    function showErrorMsg() {
+        alertify.error('<spring:message code="msg.common.valid" />', 0);
+
+        $('.ajax-file-upload-statusbar').fadeOut('slow');
+        $('.ajax-file-upload-statusbar').remove();
+    }
+    function stubColData(){
+        //데이터 추가
+        for(var i=0; i<jsonData.length ; i++ ){
+            withStatus = jsonData[i]['license'];
+            withStatus['status'] = jsonData[i]['status'];
+            $('#list').jqGrid('addRowData', i, withStatus);
+        }
+        //다시 로드
+        $("#list").trigger('reloadGrid');
+    }
+
+    function makeLicenseDTOList() {
+        for (var i = 0; i < jsonData.length; i++){
+            licenseData.push(jsonData[i]['license']);
+        }
+        console.log(licenseData);
+    }
+    function checkLoaded(){
+        $("#list").jqGrid('clearGridData');
+        for (var i=0; i < loadedInfo.length; i++){
+            for (var j = 0; j < jsonData.length; j++){
+                if (jsonData[j]['license']['licenseName'] === loadedInfo[i]['licenseName']){
+                    jsonData[j]['status'] = 'loaded';
+                    break;
+                }
+            }
+        }
+        stubColData();
+        $("#list").trigger('reloadGrid');
+    }
     $(document).ready(function()
     {
+        var target = $("#list");
+        var mainData = target.jqGrid('getGridParam','data');
+
+        if (isClicked == false) {
+            isClicked = true;
+            $("#btn").click(() => {
+                $.ajax({
+                    type: "POST",
+                    contentType: 'application/json',
+                    url: "/license/bulkRegAjax",
+                    data: JSON.stringify(licenseData),
+                    dataType: "json",
+                    success: (data) => {
+                        if (data['res'] == 'true' && data['value'] != []) {
+                            loadedInfo = data['value'];
+                            console.log(data);
+                            checkLoaded();
+                        } else if (data['res'] == 'false') {
+                            showErrorMsg();
+                        }
+                    },
+                    error: (e) => {
+                        console.log(e);
+                    }
+                })
+            })
+        }
+
+        $("#list").jqGrid({
+            datatype: "local",
+            data : jsonData,
+            colNames:['id', 'License Name','License Type','Restriction','Obligation','Short Identifier','NickName','Web site for the license','License Text',
+            'Attribution','Comment', 'Status'],
+            colModel: [
+                { name: 'id', 	index: 'id', width: 75, key:true, hidden: true},
+                {name: 'licenseName', index: 'licenseName', width: 200, align: 'left'},
+                { name: 'licenseType', index: 'licenseType', width: 100, align: 'center'},
+                { name: 'restriction', 	index: 'restriction', 	width: 150, align: 'center'},
+                { name: 'obligation', index: 'obligation', width: 200, align: 'left'},
+                { name: 'shortIdentifier', index: 'shortIdentifier', width: 100, align: 'left'},
+                { name: 'nickname', index:'nickName', width: 150, align: 'left'},
+                { name: 'webpage', index:'webpage', width: 150, align: 'left'},
+                { name: 'licenseText', index:'licenseText', width: 150, align: 'left'},
+                { name: 'attribution', index:'attribution', width: 150, align: 'left'},
+                { name: 'comment', index:'comment', width: 150, align: 'left'},
+                { name: 'status', index:'status', width: 150, align: 'left'}
+            ],
+            viewrecords: true,
+            rowNum: 10,
+            rowList:[20,40,60],
+            autowidth: true,
+            gridview: true,
+            height: 'auto',
+            pager: "#jqGridPager"
+        });
+
+        $(window).resize(function(){
+            $('jqGrid').setGridWidth($this.width()*.100);
+        })
+
         $('#srcCsvFile').uploadFile({
             url:'/license/csvFile',
             multiple:false,
@@ -24,40 +132,18 @@
                 return data;
             },
             onSuccess:function(files,data,xhr,pd) {
-                var result = jQuery.parseJSON(data);
-
-                console.log(result);
-                if(result[1] == null){
-                    alertify.error('<spring:message code="msg.common.valid" />', 0);
-
-                    $('.ajax-file-upload-statusbar').fadeOut('slow');
-                    $('.ajax-file-upload-statusbar').remove();
+                if (data['res'] == 'true'){
+                    jsonData = data['value'];
+                    makeLicenseDTOList();
+                    console.log(jsonData);
+                    stubColData();
+                    loading.hide();
+                }
+                else if(data['res'] == 'false'){
+                    showErrorMsg();
                 } else {
-                    if(result[0] == "FILE_SIZE_LIMIT_OVER"){
-                        alertify.alert(result[1], function(){
-                            $('.ajax-file-upload-statusbar').fadeOut('slow');
-                            $('.ajax-file-upload-statusbar').remove();
-                        });
-                    } else {
-                        if(result[1].length != 0){
-                            $('.sheetSelectPop').show();
-                            $('.sheetSelectPop .sheetNameArea').children().remove();
-                            $('.sheetSelectPop .sheetNameArea').text('');
-
-                            for(var i = 0; i < result[1].length; i++){
-                                var num = i+1;
-
-                                $('.sheetSelectPop .sheetNameArea').append('<li><input type="checkbox" name="sheetNameSelect" value="'+result[1][i].no+'" id="sheet'+result[1][i].no+'" class="sheetNum">'
-                                    +'<label for="sheet'+result[1][i].no+'">'+result[1][i].name+'</label></li>');
-                                $('.sheetSelectPop .sheetApply').attr('onclick', 'src_fn.getSheetData('+result[0][0].registSeq+')');
-                            }
-                        }
-
-                        $('#srcCsvFileId').val(result[0][0].registFileId);
-                        $('.ajax-file-upload-statusbar').fadeOut('slow');
-                        $('.ajax-file-upload-statusbar').remove();
-
-                        src_fn.makeFileTag(result[0][0]);
+                    if (data['limitCheck'] == null) {
+                        showErrorMsg();
                     }
                 }
             }
