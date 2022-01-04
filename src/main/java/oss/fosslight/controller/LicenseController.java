@@ -5,9 +5,7 @@
 
 package oss.fosslight.controller;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -16,12 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.*;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.multipart.MultipartFile;
@@ -33,12 +26,7 @@ import oss.fosslight.common.CommonFunction;
 import oss.fosslight.common.Url;
 import oss.fosslight.common.Url.LICENSE;
 import oss.fosslight.common.CustomXssFilter;
-import oss.fosslight.domain.CoMail;
-import oss.fosslight.domain.CoMailManager;
-import oss.fosslight.domain.CommentsHistory;
-import oss.fosslight.domain.History;
-import oss.fosslight.domain.LicenseMaster;
-import oss.fosslight.domain.OssMaster;
+import oss.fosslight.domain.*;
 import oss.fosslight.service.CommentService;
 import oss.fosslight.service.FileService;
 import oss.fosslight.service.HistoryService;
@@ -640,7 +628,7 @@ public class LicenseController extends CoTopComponent{
 	@ResponseBody
 	@PostMapping(value = Url.LICENSE.CSV_FILE)
 	public ResponseEntity<Object> csvFile(T2File file, MultipartHttpServletRequest req, HttpServletRequest request,
-						  HttpServletResponse res, Model model) throws Exception {
+										  HttpServletResponse res, Model model) throws Exception {
 		// oss list (oss name으로만)
 		List<Object> resultList = new ArrayList<>();
 		List<Object> limitCheckFiles = new ArrayList<>();
