@@ -213,19 +213,16 @@ public class LicenseController extends CoTopComponent{
 			, HttpServletRequest req
 			, HttpServletResponse res
 			, Model model) {
-		//응답 형식 : List<Map<String, String>>
 		List<Map<String, String>> licenseNameMapList = new ArrayList<>();
-		System.out.println("saveAjax/json -> licenseMaster = " + licenseMasters);
 		Map<String, Object> resMap = new HashMap<>();
 
+		//When the licenseMaster List delivered from the client is empty (if the upload button is pressed without uploading the file)
 		if (licenseMasters.isEmpty()){
 			resMap.put("res", "false");
 			return makeJsonResponseHeader(resMap);
 		}
 
-		//LicenseType, Obligation, Restriction에 대한 처리 로직
-		//License Type 변환 및 Restriction 변환
-
+		//Processing logic for LicenseType, Obligation, and Restriction
 		for (LicenseMaster licenseMaster : licenseMasters) {
 			String licenseType = licenseMaster.getLicenseType();
 			licenseType = StringUtil.removeWhitespace(licenseType);
@@ -243,7 +240,6 @@ public class LicenseController extends CoTopComponent{
 				resMap.put("res", "false");
 				return makeJsonResponseHeader(resMap);
 			}
-			System.out.println("licenseMaster.getLicenseType() = " + licenseMaster.getLicenseType());
 			String[] restrictions = StringUtil.delimitedStringToStringArray(licenseMaster.getRestriction(), ",");
 			List<String> restrictionList = new ArrayList<>();
 			String restrictionCodes = "";
@@ -278,13 +274,11 @@ public class LicenseController extends CoTopComponent{
 
 				StringUtil.removeEnd(restrictionCodes, ",");
 				licenseMaster.setRestrictions(restrictionCodes);
-				System.out.println("licenseMaster.getRestrictions() = " + licenseMaster.getRestrictions());
 			}
 
 			String[] obligations = StringUtil.delimitedStringToStringArray(licenseMaster.getObligation(), ",");
 			for (String obligation : obligations) {
 				obligation = StringUtil.removeWhitespace(obligation);
-				System.out.println("obligation rm whiteSpace = " + obligation);
 				if (StringUtil.equalsIgnoreCase(obligation, "notice")) {
 					licenseMaster.setObligationNotificationYn("Y");
 				} else if (StringUtil.equalsIgnoreCase(obligation, "sourcecode")) {
@@ -295,33 +289,24 @@ public class LicenseController extends CoTopComponent{
 					return makeJsonResponseHeader(resMap);
 				}
 			}
-			System.out.println("licenseMaster.getObligation() = " + licenseMaster.getObligation());
 		}
 
 		List<LicenseMaster> notSavedLicenses = new ArrayList<>();
 
-		//checkExitsLicense할 때 파라미터로 넘길 때 licenseMaster.setLicenseName으로 name 체크, nickname체크, shortIdentifier 체크 해주어야함.
 		Boolean isDup;
 
 		for (LicenseMaster l : licenseMasters) {
-			System.out.println("l = " + l);
-			//name 검사
 			isDup = false;
-			LicenseMaster tmp = licenseService.checkExistsLicense(l);
-			if (!isNullObject(tmp)) { //null이 아닐때 해당 name을 가진 License가 존재한다는것.
+			LicenseMaster licenseMaster = licenseService.checkExistsLicense(l);
+			if (licenseMaster != null)	// In case the license already exists in the DB
 				continue;
-			}
-			System.out.println("tmp = " + tmp);
-			//nickname검사 nickname은 여러개일 수 있음. 입력 form()
+
 			String[] tmpNicknames = l.getLicenseNicknames();
 			if (!isNullObject(tmpNicknames)) {
-				System.out.println("tmpNicknames = " + tmpNicknames);
 				for (String s : tmpNicknames) {
 					LicenseMaster nickname = new LicenseMaster();
 					nickname.setLicenseName(s);
-					System.out.println("nickname = " + nickname);
 					nickname = licenseService.checkExistsLicense(nickname);
-					System.out.println("after check nickname = " + nickname);
 					if (!isNullObject(nickname)) {
 						isDup = true;
 						continue;
@@ -332,7 +317,6 @@ public class LicenseController extends CoTopComponent{
 			LicenseMaster licenseNameForIdentifier = new LicenseMaster();
 			licenseNameForIdentifier.setLicenseName(identifier);
 			licenseNameForIdentifier = licenseService.checkExistsLicense(licenseNameForIdentifier);
-			System.out.println("after check licenseNameForIdentifier = " + licenseNameForIdentifier);
 			if (!isNullObject(licenseNameForIdentifier)) {
 				isDup = true;
 				continue;
@@ -604,9 +588,6 @@ public class LicenseController extends CoTopComponent{
 
 	@GetMapping(value = LICENSE.LICENSE_BULK_REG, produces = "text/html; charset=utf-8")
 	public String LicenseBulkRegPage(HttpServletRequest req, HttpServletResponse res, Model model) {
-		// oss list (oss name으로만)
-		System.out.println("LICENSE_BULK_REG");
-		model.addAttribute("message", "hello");
 
 		return LICENSE.LICENSE_BULK_REG_JSP;
 	}
@@ -654,8 +635,6 @@ public class LicenseController extends CoTopComponent{
 		//존재하지않으면 Null 리턴. -> null일 경우는 등록을 해야한다.
 		licenseList = ExcelUtil.readLicenseList(req, CommonFunction.emptyCheckProperty("upload.path", "/upload"));
 
-		System.out.println("readLicenseList -> licenseList = " + licenseList);
-
 		if (licenseList != null) {
 			Map<String, Object> licenseWithStatus;
 			for (int i = 0; i < licenseList.size(); i++) {
@@ -669,7 +648,6 @@ public class LicenseController extends CoTopComponent{
 			return makeJsonResponseHeader(resMap);
 		}
 
-		System.out.println("licenseWithStatusList = " + licenseWithStatusList);
 		resMap.put("res", "true");
 		resMap.put("value", licenseWithStatusList);
 
