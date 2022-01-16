@@ -95,37 +95,34 @@ public class ExcelUtil extends CoTopComponent {
 	public static List<LicenseMaster> readLicenseList(MultipartHttpServletRequest req, String excelLocalPath) throws InvalidFormatException, IOException {
 		Iterator<String> fileNames = req.getFileNames();
 		List<LicenseMaster> licenseMasterList = new ArrayList<>();
+		String[] definedColData = new String[] {"License Name", "License Type", "Restriction", "Obligation", "SPDX Short Identifier", "Nickname",
+				"Web site for the license", "License Text", "User Guide", "Attribution", "Comment"};
 
-		int id = 1;
+		//int id = 1;
 
 		while (fileNames.hasNext()) {
-			//파일 만들기
 			MultipartFile multipart = req.getFile(fileNames.next());
 			String fileName = multipart.getOriginalFilename();
 			String[] fileNameArray = StringUtil.split(fileName, File.separator);
 			fileName = fileNameArray[fileNameArray.length - 1];
 
-			System.out.println("fileName = " + fileName);
 			File file = new File(excelLocalPath + "/" + fileName);
 			FileUtil.transferTo(multipart, file);
-			//엑셀 컬럼 읽기
 			HSSFWorkbook wbHSSF = null;
 			XSSFWorkbook wbXSSF = null;
 			String[] ext = StringUtil.split(fileName, ".");
 			String extType = ext[ext.length - 1];
-			String codeExt[] = StringUtil.split(codeMapper.selectExtType("12"), ",");
+			String codeExt[] = StringUtil.split(codeMapper.selectExtType("11"), ","); // The codeExt array contains the allowed extension types.
 			int count = 0;
 
 			for (int i = 0; i < codeExt.length; i++) {
 				if (codeExt[i].equalsIgnoreCase(extType)) {
 					count++;
 				}
-				;
 			}
-			int rowindex = 0;
-			int colindex = 0;
 
-			System.out.println("extType = " + extType);
+			int rowIndex = 0;
+			int colIndex = 0;
 
 			if (count != 1) {
 				return null;
@@ -134,22 +131,45 @@ public class ExcelUtil extends CoTopComponent {
 					wbHSSF = new HSSFWorkbook(new FileInputStream(file));
 
 					HSSFSheet sheet = wbHSSF.getSheetAt(0);
-					System.out.println("sheet HSSFSheet= " + sheet);
 					int rowSize = sheet.getPhysicalNumberOfRows();
-					System.out.println("rowSize = " + rowSize);
-					for (rowindex = 0; rowindex < rowSize; rowindex++) {
+					for (rowIndex = 0; rowIndex < rowSize; rowIndex++) {
 						LicenseMaster licenseMaster = new LicenseMaster();
-						if (rowindex == 0)
-							continue;
-						else {
-							HSSFRow row = sheet.getRow(rowindex);
-							int maxcols = row.getLastCellNum();
+						if (rowIndex == 0) {
+							boolean flag = true;
 
-							for (colindex = 0; colindex < maxcols; colindex++) {
-								HSSFCell cell = row.getCell(colindex);
+							HSSFRow firstRow = sheet.getRow(rowIndex);
+							int maxCols = firstRow.getLastCellNum();
+
+							List<String> firstRowColData = new ArrayList<>();
+
+							for (colIndex = 0; colIndex < maxCols; colIndex++) {
+								HSSFCell cell = firstRow.getCell(colIndex);
+								firstRowColData.add(getCellData(cell));
+							}
+
+
+							for (int cIdx = 0; cIdx < definedColData.length; cIdx++) {
+								String colData = firstRowColData.get(cIdx);
+								if (colData != null && definedColData[cIdx].equals(colData))
+									continue;
+								else {
+									flag = false;
+									break;
+								}
+							}
+							if (!flag)
+								return null;
+
+							continue;
+						}
+						else {
+							HSSFRow row = sheet.getRow(rowIndex);
+							int maxCols = row.getLastCellNum();
+
+							for (colIndex = 0; colIndex < maxCols; colIndex++) {
+								HSSFCell cell = row.getCell(colIndex);
 								String value = getCellData(cell);
-								System.out.println("value = " + value + ", " + "rowindex : " + rowindex + ", " + "colindex : " + colindex);
-								if (colindex == 0) { //License Name
+								if (colIndex == 0) { //License Name
 									if (value == null) {
 										log.debug("license Name must not be null.");
 										if (licenseMasterList.isEmpty()){
@@ -160,7 +180,7 @@ public class ExcelUtil extends CoTopComponent {
 									} else {
 										licenseMaster.setLicenseName(value);
 									}
-								} else if (colindex == 1) { //License Type
+								} else if (colIndex == 1) { //License Type
 									if (value == null) {
 										log.error("license Type must not be null.");
 										if (licenseMasterList.isEmpty()){
@@ -171,22 +191,22 @@ public class ExcelUtil extends CoTopComponent {
 									} else { //possible value : Permissive, permissive => Permissive
 										licenseMaster.setLicenseType(value);
 									}
-								} else if (colindex == 2) { // Restriction (Format : '1,2,3')
+								} else if (colIndex == 2) { // Restriction (Format : '1,2,3')
 									if (value == null) {
 									} else {
 										licenseMaster.setRestriction(value);
 									}
-								} else if (colindex == 3) { // Obligation (value : Notice, Source Code)
+								} else if (colIndex == 3) { // Obligation (value : Notice, Source Code)
 									if (value == null) {
 									} else {
 										licenseMaster.setObligation(value);
 									}
-								} else if (colindex == 4) { // SPDX Short Identifier
+								} else if (colIndex == 4) { // SPDX Short Identifier
 									if (value == null) {
 									} else {
 										licenseMaster.setShortIdentifier(value);
 									}
-								} else if (colindex == 5) { // Nickname (licenseNicknames : list형태 ,로 구분)
+								} else if (colIndex == 5) { // Nickname (licenseNicknames : list형태 ,로 구분)
 									if (value == null) {
 									} else {
 										String[] nicknames = StringUtil.delimitedStringToStringArray(value, ",");
@@ -195,12 +215,12 @@ public class ExcelUtil extends CoTopComponent {
 
 										licenseMaster.setLicenseNicknames(nicknames);
 									}
-								} else if (colindex == 6) { // Web site for the license
+								} else if (colIndex == 6) { // Web site for the license
 									if (value == null) {
 									} else {
 										licenseMaster.setWebpage(value);
 									}
-								} else if (colindex == 7) { // License Text
+								} else if (colIndex == 7) { // License Text
 									if (value == null) {
 										log.error("License Text must not be empty.");
 										if (licenseMasterList.isEmpty())
@@ -210,17 +230,17 @@ public class ExcelUtil extends CoTopComponent {
 									} else {
 										licenseMaster.setLicenseText(value);
 									}
-								} else if (colindex == 8) { //User Guide
+								} else if (colIndex == 8) { //User Guide
 									if (value == null) {
 									} else {
-										System.out.println("User Guide = " + value);
+										licenseMaster.setDescription(value);
 									}
-								} else if (colindex == 9) { //attribution
+								} else if (colIndex == 9) { //attribution
 									if (value == null) {
 									} else {
 										licenseMaster.setAttribution(value);
 									}
-								} else if (colindex == 10) { //Comment (<p> context </p>)
+								} else if (colIndex == 10) { //Comment (<p> context </p>)
 									if (value == null) {
 									} else {
 										licenseMaster.setComment(value);
@@ -228,7 +248,6 @@ public class ExcelUtil extends CoTopComponent {
 								}
 							}
 						}
-						System.out.println("Excel Util licenseMaster = " + licenseMaster);
 						licenseMasterList.add(licenseMaster);
 					}
 				} catch (IOException e) {
@@ -245,22 +264,46 @@ public class ExcelUtil extends CoTopComponent {
 					wbXSSF = new XSSFWorkbook(new FileInputStream(file));
 
 					XSSFSheet sheet = wbXSSF.getSheetAt(0);
-					System.out.println("XSSFSheet sheet = " + sheet);
 					int rowSize = sheet.getPhysicalNumberOfRows();
-					System.out.println("rowSize = " + rowSize);
-					for (rowindex = 0; rowindex < rowSize; rowindex++) {
+					for (rowIndex = 0; rowIndex < rowSize; rowIndex++) {
 						LicenseMaster licenseMaster = new LicenseMaster();
-						if (rowindex == 0)
+						if (rowIndex == 0) { //The columns of the first row are the columns that are mapped to the field variables of the DAO.
+							boolean flag = true;
+
+							XSSFRow firstRow = sheet.getRow(rowIndex);
+							int maxCols = firstRow.getLastCellNum();
+
+							List<String> firstRowColData = new ArrayList<>();
+							//Check if the first row has column data suitable for LicenseMaster DAO
+
+							for (colIndex = 0; colIndex < maxCols; colIndex++) {
+								XSSFCell cell = firstRow.getCell(colIndex);
+								firstRowColData.add(getCellData(cell));
+							}
+
+
+							for (int cIdx = 0; cIdx < definedColData.length; cIdx++) {
+								String colData = firstRowColData.get(cIdx);
+								if (colData != null && definedColData[cIdx].equals(colData))
+									continue;
+								else {
+									flag = false;
+									break;
+								}
+							}
+							if (!flag) {
+								return null;
+							}
+
 							continue;
-						else {
-							XSSFRow row = sheet.getRow(rowindex);
+						} else {
+							XSSFRow row = sheet.getRow(rowIndex);
 							int maxcols = row.getLastCellNum();
 
-							for (colindex = 0; colindex < maxcols; colindex++) {
-								XSSFCell cell = row.getCell(colindex);
+							for (colIndex = 0; colIndex < maxcols; colIndex++) {
+								XSSFCell cell = row.getCell(colIndex);
 								String value = getCellData(cell);
-								System.out.println("value = " + value + ", " + "rowindex : " + rowindex + ", " + "colindex : " + colindex);
-								if (colindex == 0) { //License Name
+								if (colIndex == 0) { //License Name
 									if (value == null) {
 										log.debug("license Name must not be null.");
 										if (licenseMasterList.isEmpty()){
@@ -271,7 +314,7 @@ public class ExcelUtil extends CoTopComponent {
 									} else {
 										licenseMaster.setLicenseName(value);
 									}
-								} else if (colindex == 1) { //License Type
+								} else if (colIndex == 1) { //License Type
 									if (value == null) {
 										log.error("license Type must not be null.");
 										if (licenseMasterList.isEmpty()){
@@ -282,22 +325,22 @@ public class ExcelUtil extends CoTopComponent {
 									} else { //possible value : Permissive, permissive => Permissive
 										licenseMaster.setLicenseType(value);
 									}
-								} else if (colindex == 2) { // Restriction (Format : '1,2,3')
+								} else if (colIndex == 2) { // Restriction (Format : '1,2,3')
 									if (value == null) {
 									} else {
 										licenseMaster.setRestriction(value);
 									}
-								} else if (colindex == 3) { // Obligation (value : Notice, Source Code)
+								} else if (colIndex == 3) { // Obligation (value : Notice, Source Code)
 									if (value == null) {
 									} else {
 										licenseMaster.setObligation(value);
 									}
-								} else if (colindex == 4) { // SPDX Short Identifier
+								} else if (colIndex == 4) { // SPDX Short Identifier
 									if (value == null) {
 									} else {
 										licenseMaster.setShortIdentifier(value);
 									}
-								} else if (colindex == 5) { // Nickname (licenseNicknames : list형태 ,로 구분)
+								} else if (colIndex == 5) { // Nickname (licenseNicknames : list형태 ,로 구분)
 									if (value == null) {
 									} else {
 										String[] nicknames = StringUtil.delimitedStringToStringArray(value, ",");
@@ -306,12 +349,12 @@ public class ExcelUtil extends CoTopComponent {
 
 										licenseMaster.setLicenseNicknames(nicknames);
 									}
-								} else if (colindex == 6) { // Web site for the license
+								} else if (colIndex == 6) { // Web site for the license
 									if (value == null) {
 									} else {
 										licenseMaster.setWebpage(value);
 									}
-								} else if (colindex == 7) { // License Text
+								} else if (colIndex == 7) { // License Text
 									if (value == null) {
 										log.error("License Text must not be empty.");
 										if (licenseMasterList.isEmpty())
@@ -321,17 +364,17 @@ public class ExcelUtil extends CoTopComponent {
 									} else {
 										licenseMaster.setLicenseText(value);
 									}
-								} else if (colindex == 8) { //User Guide
+								} else if (colIndex == 8) { //User Guide
 									if (value == null) {
 									} else {
-										System.out.println("User Guide = " + value);
+										licenseMaster.setDescription(value);
 									}
-								} else if (colindex == 9) { //attribution
+								} else if (colIndex == 9) { //attribution
 									if (value == null) {
 									} else {
 										licenseMaster.setAttribution(value);
 									}
-								} else if (colindex == 10) { //Comment (<p> context </p>)
+								} else if (colIndex == 10) { //Comment (<p> context </p>)
 									if (value == null) {
 									} else {
 										licenseMaster.setComment(value);
@@ -339,7 +382,6 @@ public class ExcelUtil extends CoTopComponent {
 								}
 							}
 						}
-						System.out.println("Excel Util licenseMaster = " + licenseMaster);
 						licenseMasterList.add(licenseMaster);
 					}
 				} catch (IOException e) {
