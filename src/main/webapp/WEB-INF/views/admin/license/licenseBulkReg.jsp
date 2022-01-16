@@ -7,12 +7,14 @@
 --%>
 <%@ page contentType="text/html; charset=utf-8" pageEncoding="utf-8"%>
 <%@ include file="/WEB-INF/constants.jsp"%>
-<%@ include file="./licenseBulkReg-js.jsp"%>
+<head>
+    <tiles:insertAttribute name="scripts"></tiles:insertAttribute>
+</head>
 <div id="wrapIframe">
     <body>
     <div>
         <span class="fileex_back">
-            <div id="srcCsvFile">+ Add file</div>
+            <div id="csvFile">+ Add file</div>
         </span>
     </div>
     <div class="jqGridSet">
@@ -26,4 +28,4 @@
     </div>
     </body>
 </div>
-
+<tiles:insertAttribute name="licenseBulkReg-js"></tiles:insertAttribute>
